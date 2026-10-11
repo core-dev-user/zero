@@ -1,3 +1,4 @@
+import { WEAPONS, weaponById } from "./weapons.js";
 export const ARENA = 44;
 export const WALLS = [
   { x: -8, z: -5, w: 3, d: 14, h: 3 },
@@ -9,15 +10,7 @@ export const WALLS = [
   { x: -14, z: -15, w: 5, d: 3, h: 2.5 },
   { x: 14, z: 15, w: 5, d: 3, h: 2.5 },
 ];
-export const WEAPON = Object.freeze({
-  name: "RX-06 Revólver",
-  capacity: 6,
-  reserve: 60,
-  damage: 34,
-  range: 55,
-  interval: 0.32,
-  reload: 1.65,
-});
+export const WEAPON = WEAPONS[0];
 export function blocked(x, z, r = 0.4) {
   if (Math.abs(x) > ARENA / 2 - r || Math.abs(z) > ARENA / 2 - r) return true;
   return WALLS.some(
@@ -48,18 +41,19 @@ export function visible(a, b) {
       return false;
   return true;
 }
-export function damageAt(distance, head = false) {
-  if (distance > WEAPON.range) return 0;
+export function damageAt(distance, head = false, definition = WEAPON) {
+  if (distance > definition.range) return 0;
   return Math.round(
-    WEAPON.damage *
+    definition.damage *
       Math.max(0.45, 1 - Math.max(0, distance - 12) / 70) *
       (head ? 1.8 : 1),
   );
 }
-export function createWeapon() {
+export function createWeapon(definition = WEAPON) {
   return {
-    ammo: WEAPON.capacity,
-    reserve: WEAPON.reserve,
+    definition,
+    ammo: definition.capacity,
+    reserve: definition.reserve,
     cooldown: 0,
     reloading: 0,
   };
@@ -67,13 +61,13 @@ export function createWeapon() {
 export function fire(w) {
   if (w.cooldown > 0 || w.reloading > 0 || w.ammo <= 0) return false;
   w.ammo--;
-  w.cooldown = WEAPON.interval;
+  w.cooldown = w.definition.interval;
   return true;
 }
 export function reload(w) {
-  if (w.reloading > 0 || w.ammo === WEAPON.capacity || w.reserve === 0)
+  if (w.reloading > 0 || w.ammo === w.definition.capacity || w.reserve === 0)
     return false;
-  w.reloading = WEAPON.reload;
+  w.reloading = w.definition.reload;
   return true;
 }
 export function tickWeapon(w, dt) {
@@ -81,7 +75,7 @@ export function tickWeapon(w, dt) {
   if (w.reloading > 0) {
     w.reloading = Math.max(0, w.reloading - dt);
     if (w.reloading === 0) {
-      const n = Math.min(WEAPON.capacity - w.ammo, w.reserve);
+      const n = Math.min(w.definition.capacity - w.ammo, w.reserve);
       w.ammo += n;
       w.reserve -= n;
     }
@@ -93,10 +87,18 @@ export class Match {
   }
   reset() {
     this.player = { x: 0, z: 18, hp: 100, y: 1.7, vy: 0 };
-    this.weapon = createWeapon();
+    this.inventory = new Map(WEAPONS.map((def) => [def.id, createWeapon(def)]));
+    this.weapon = this.inventory.get(WEAPON.id);
     this.kills = 0;
     this.time = 180;
     this.state = "playing";
+  }
+  equip(id) {
+    if (this.state !== "playing" || !weaponById(id)) return false;
+    const next = this.inventory.get(id);
+    if (next !== this.weapon) this.weapon.reloading = 0;
+    this.weapon = next;
+    return true;
   }
   hitPlayer(n) {
     if (this.state !== "playing") return;
@@ -111,7 +113,10 @@ export class Match {
   tick(dt) {
     if (this.state !== "playing") return;
     this.time = Math.max(0, this.time - dt);
-    tickWeapon(this.weapon, dt);
+    for (const w of this.inventory.values()) {
+      if (w === this.weapon) tickWeapon(w, dt);
+      else w.cooldown = Math.max(0, w.cooldown - dt);
+    }
     if (!this.time) this.state = "lost";
   }
 }

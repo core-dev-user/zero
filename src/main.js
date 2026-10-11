@@ -1,18 +1,11 @@
 import * as THREE from "three";
 import "./style.css";
-import {
-  WALLS,
-  WEAPON,
-  Match,
-  move,
-  damageAt,
-  fire,
-  reload,
-} from "./simulation.js";
+import { WALLS, Match, move, damageAt, fire, reload } from "./simulation.js";
 import { Audio } from "./audio.js";
 import { createEnemy, tickEnemy } from "./ai.js";
 import { createSoldierVisual } from "./enemy-visual.js";
-import { createRevolver } from "./revolver.js";
+import { createWeaponModel } from "./weapon-models.js";
+import { createArsenal } from "./arsenal.js";
 const $ = (id) => document.getElementById(id);
 const defaults = {
   sensitivity: 1,
@@ -170,13 +163,18 @@ markings.material = new THREE.MeshStandardMaterial({
 });
 const weapon = new THREE.Group();
 camera.add(weapon);
-const revolver = createRevolver();
-weapon.add(revolver.model);
+const models = new Map();
+function getModel(id) {
+  if (!models.has(id)) models.set(id, createWeaponModel(id));
+  return models.get(id);
+}
+let activeModel = getModel(match.weapon.definition.id);
+weapon.add(activeModel.model);
 const flash = new THREE.Mesh(
   new THREE.SphereGeometry(0.045, 7, 7),
   new THREE.MeshBasicMaterial({ color: "#fff2b0" }),
 );
-flash.position.copy(revolver.muzzle);
+flash.position.copy(activeModel.muzzle);
 weapon.add(flash);
 flash.visible = false;
 const muzzle = new THREE.PointLight("#ffcd70", 0, 3);
@@ -237,6 +235,7 @@ function syncHud() {
     w = match.weapon;
   $("health").textContent = p.hp;
   $("healthbar").style.width = p.hp + "%";
+  $("weapon-name").textContent = w.definition.name;
   $("ammo").textContent = w.ammo;
   $("reserve").textContent = w.reserve;
   $("kills").textContent = match.kills;
@@ -251,10 +250,50 @@ function syncHud() {
       ? "RECARREGANDO…"
       : w.ammo === 0
         ? "PRESSIONE R PARA RECARREGAR"
-        : "REVÓLVER · 6 CÂMARAS";
+        : w.definition.category + " · " + w.definition.capacity + " MUNIÇÕES";
   $("status").textContent = enemies.some((e) => e.state === "combat")
     ? "Contato hostil — procure cobertura"
     : "Patrulha ativa";
+}
+let arsenalOpen = false;
+function equipVisual() {
+  weapon.remove(activeModel.model);
+  activeModel = getModel(match.weapon.definition.id);
+  weapon.add(activeModel.model);
+  flash.position.copy(activeModel.muzzle);
+  muzzle.position.copy(flash.position);
+  recoil = 0;
+  flashTime = 0;
+  trigger = false;
+}
+const arsenal = createArsenal(
+  getModel,
+  (id) => {
+    if (match.equip(id)) {
+      equipVisual();
+      syncHud();
+      closeArsenal();
+    }
+  },
+  closeArsenal,
+);
+function openArsenal() {
+  if (!started || match.state !== "playing") return;
+  arsenalOpen = true;
+  paused = true;
+  keys.clear();
+  trigger = false;
+  aim = false;
+  document.exitPointerLock();
+  $("hud").hidden = true;
+  $("menu").hidden = true;
+  arsenal.open(match.weapon.definition.id);
+}
+async function closeArsenal() {
+  if (!arsenalOpen) return;
+  arsenalOpen = false;
+  arsenal.close();
+  await begin();
 }
 function showMenu(title, description, button) {
   paused = true;
@@ -271,6 +310,7 @@ function showMenu(title, description, button) {
 async function begin() {
   if (!started || match.state !== "playing") {
     match.reset();
+    equipVisual();
     spawnEnemies();
     yaw = 0;
     pitch = 0;
@@ -286,8 +326,11 @@ async function begin() {
     await audio.unlock();
     await $("game").requestPointerLock();
   } catch {
-    $("menu-description").textContent =
-      "O navegador não permitiu capturar o mouse. Clique em iniciar novamente.";
+    showMenu(
+      "Pausado",
+      "O navegador não permitiu capturar o mouse. Clique em retomar novamente.",
+      "RETOMAR OPERAÇÃO",
+    );
     return;
   }
   paused = false;
@@ -323,6 +366,16 @@ document.addEventListener("mousemove", (e) => {
   );
 });
 document.addEventListener("keydown", (e) => {
+  if (
+    !e.repeat &&
+    ((e.code === "KeyB" && started && match.state === "playing") ||
+      (e.code === "Escape" && arsenalOpen))
+  ) {
+    e.preventDefault();
+    if (arsenalOpen) closeArsenal();
+    else if (!paused) openArsenal();
+    return;
+  }
   if (paused) return;
   if (["Space", "ControlLeft", "KeyW", "KeyS", "KeyA", "KeyD"].includes(e.code))
     e.preventDefault();
@@ -395,32 +448,44 @@ function effect(from, to, color) {
 }
 function shoot() {
   if (!fire(match.weapon)) return;
-  trigger = false; // One shot per press for the revolver.
+  const definition = match.weapon.definition;
+  if (!definition.automatic) trigger = false;
   noise = { x: match.player.x, z: match.player.z };
   audio.play("shot");
   flashTime = 0.055;
   recoil = 0.06;
-  pitch = Math.min(1.35, pitch + 0.016);
+  pitch = Math.min(1.35, pitch + definition.recoil);
   camera.updateMatrixWorld(true);
-  ray.setFromCamera(new THREE.Vector2(0, 0), camera);
-  ray.far = WEAPON.range;
-  const hits = ray.intersectObjects(
-    [...solids, ...enemies.filter((e) => e.hp > 0).flatMap((e) => e.parts)],
-    false,
-  );
-  const h = hits[0],
-    to = h ? h.point : ray.ray.at(WEAPON.range, new THREE.Vector3());
-  effect(flash.getWorldPosition(new THREE.Vector3()), to, "#e4dbae");
-  if (h) {
-    audio.play("hit");
-    const e = h.object.userData.enemy;
-    if (e) {
-      e.hp = Math.max(0, e.hp - damageAt(h.distance, h.object.userData.head));
-      hitTime = 0.15;
-      if (!e.hp) {
-        match.kill();
-        e.model.rotation.z = Math.PI / 2;
-        e.model.position.y = 0.33;
+  for (let pellet = 0; pellet < definition.pellets; pellet++) {
+    ray.setFromCamera(
+      new THREE.Vector2(
+        pellet === 0 ? 0 : Math.cos((pellet * Math.PI) / 3) * definition.spread,
+        pellet === 0 ? 0 : Math.sin((pellet * Math.PI) / 3) * definition.spread,
+      ),
+      camera,
+    );
+    ray.far = definition.range;
+    const hits = ray.intersectObjects(
+      [...solids, ...enemies.filter((e) => e.hp > 0).flatMap((e) => e.parts)],
+      false,
+    );
+    const h = hits[0],
+      to = h ? h.point : ray.ray.at(definition.range, new THREE.Vector3());
+    effect(flash.getWorldPosition(new THREE.Vector3()), to, "#e4dbae");
+    if (h) {
+      audio.play("hit");
+      const e = h.object.userData.enemy;
+      if (e) {
+        e.hp = Math.max(
+          0,
+          e.hp - damageAt(h.distance, h.object.userData.head, definition),
+        );
+        hitTime = 0.15;
+        if (!e.hp) {
+          match.kill();
+          e.model.rotation.z = Math.PI / 2;
+          e.model.position.y = 0.33;
+        }
       }
     }
   }
@@ -467,7 +532,10 @@ function update(dt) {
     aim ? -0.16 : 0,
     (settings.motion && length ? Math.sin(elapsed * 10) * 0.007 : 0) -
       (match.weapon.reloading > 0
-        ? 0.18 * Math.sin((match.weapon.reloading / WEAPON.reload) * Math.PI)
+        ? 0.18 *
+          Math.sin(
+            (match.weapon.reloading / match.weapon.definition.reload) * Math.PI,
+          )
         : 0),
     recoil,
   );
@@ -531,6 +599,7 @@ function update(dt) {
 }
 let last = performance.now();
 function frame(now) {
+  arsenal.render(now);
   requestAnimationFrame(frame);
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
@@ -572,6 +641,8 @@ export function getTelemetry() {
     paused,
     player: { ...match.player },
     weapon: { ...match.weapon },
+    weaponModel: activeModel.model.children.length,
+    arsenalOpen,
     kills: match.kills,
     enemies: enemies.map(({ x, z, hp, state }) => ({ x, z, hp, state })),
     yaw,

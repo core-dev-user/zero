@@ -106,3 +106,42 @@ test("moving actors cannot pass through a live actor", () => {
   move(p, 0, 10, 0.4, [{ x: 0, z: 2, radius: 0.45 }]);
   assert.ok(p.z <= 1.15);
 });
+
+test("free arsenal preserves ammo across switches and cancels unfinished reload", async () => {
+  const { WEAPONS } = await import("../src/weapons.js");
+  const m = new Match();
+  assert.equal(WEAPONS.length, 5);
+  assert.ok(WEAPONS.every((w) => w.price === 0));
+  fire(m.weapon);
+  const saved = m.weapon.ammo;
+  reload(m.weapon);
+  assert.ok(m.equip("rifle"));
+  assert.equal(m.weapon.definition.capacity, 30);
+  assert.ok(m.equip("revolver"));
+  assert.equal(m.weapon.ammo, saved);
+  assert.equal(m.weapon.reloading, 0);
+  assert.equal(m.equip("unknown"), false);
+  assert.equal(m.weapon.definition.id, "revolver");
+  m.hitPlayer(100);
+  assert.equal(m.equip("rifle"), false);
+  m.reset();
+  assert.ok(m.equip("rifle"));
+  assert.equal(m.weapon.ammo, 30);
+});
+test("every weapon uses its own cadence, finite ammunition, reload and damage", async () => {
+  const { WEAPONS } = await import("../src/weapons.js");
+  for (const def of WEAPONS) {
+    const w = createWeapon(def);
+    assert.ok(fire(w));
+    assert.equal(w.ammo, def.capacity - 1);
+    assert.equal(w.cooldown, def.interval);
+    assert.equal(fire(w), false);
+    tickWeapon(w, def.interval);
+    assert.ok(reload(w));
+    tickWeapon(w, def.reload);
+    assert.equal(w.ammo, def.capacity);
+    assert.equal(w.reserve, def.reserve - 1);
+    assert.equal(damageAt(5, false, def), def.damage);
+    assert.equal(damageAt(def.range + 1, false, def), 0);
+  }
+});

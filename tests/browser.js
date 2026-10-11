@@ -65,13 +65,24 @@ try {
       );
     }, target);
   }
-  await aimAtTarget();
-  await page.mouse.down();
-  await page.waitForFunction(
-    (i) => window.__ozTelemetry().enemies[i].hp < 100,
-    target,
-  );
-  await page.mouse.up();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.waitForFunction(
+      () => window.__ozTelemetry().weapon.cooldown === 0,
+    );
+    await aimAtTarget();
+    const before = await page.locator("#ammo").textContent();
+    await page.mouse.down();
+    await page.waitForFunction(
+      (before) => document.getElementById("ammo").textContent !== before,
+      before,
+    );
+    await page.mouse.up();
+    if (
+      (await page.evaluate(() => window.__ozTelemetry())).enemies[target].hp <
+      100
+    )
+      break;
+  }
   assert.ok(
     (await page.evaluate(() => window.__ozTelemetry())).enemies[target].hp <
       100,
@@ -116,6 +127,58 @@ try {
   await page.waitForTimeout(1100);
   assert.equal(await page.locator("#timer").textContent(), before);
   await page.locator("#play").click();
+  await page.waitForFunction(() => !document.getElementById("hud").hidden);
+  const capacity = { rifle: 30, smg: 32, shotgun: 8, sniper: 5, revolver: 6 };
+  const revolverAmmo = Number(await page.locator("#ammo").textContent());
+  for (const [id, count] of Object.entries(capacity)) {
+    await page.keyboard.press("b");
+    await page.waitForFunction(
+      () => !document.getElementById("arsenal").hidden,
+    );
+    assert.equal(await page.locator("#weapon-options button").count(), 5);
+    const time = await page.locator("#timer").textContent();
+    await page.locator(`[data-weapon="${id}"]`).click();
+    assert.equal(
+      await page.locator(`[data-weapon="${id}"]`).getAttribute("aria-pressed"),
+      "true",
+    );
+    await page.waitForTimeout(250);
+    assert.equal(await page.locator("#timer").textContent(), time);
+    await page.screenshot({ path: `/tmp/zero-arsenal-${id}.png` });
+    await page.locator("#equip-weapon").click();
+    await page.waitForFunction(() => !document.getElementById("hud").hidden);
+    const telemetry = await page.evaluate(() => window.__ozTelemetry());
+    assert.equal(telemetry.weapon.definition.id, id);
+    assert.ok(telemetry.weaponModel > 0);
+    assert.equal(
+      telemetry.weapon.ammo,
+      id === "revolver" ? revolverAmmo : count,
+    );
+    if (id === "revolver") continue;
+    await page.mouse.down();
+    if (id === "rifle" || id === "smg") {
+      await page.waitForFunction(
+        (count) => window.__ozTelemetry().weapon.ammo <= count - 2,
+        count,
+      );
+    } else {
+      await page.waitForFunction(
+        (count) => window.__ozTelemetry().weapon.ammo === count - 1,
+        count,
+      );
+      await page.waitForFunction(
+        () => window.__ozTelemetry().weapon.cooldown === 0,
+      );
+      assert.equal(
+        Number(await page.locator("#ammo").textContent()),
+        count - 1,
+      );
+    }
+    await page.mouse.up();
+  }
+  await page.keyboard.press("b");
+  await page.waitForFunction(() => !document.getElementById("arsenal").hidden);
+  await page.keyboard.press("Escape");
   await page.waitForFunction(() => !document.getElementById("hud").hidden);
   assert.equal(await page.locator("#error").isVisible(), false);
   assert.deepEqual(errors, []);

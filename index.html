@@ -36,10 +36,10 @@
         </div>
         <div class="controls">
           WASD mover · Shift correr · Espaço saltar · Ctrl agachar<br />Mouse
-          disparar · Botão direito mirar · R recarregar · Esc pausar
+          disparar · Botão direito mirar · R recarregar · Esc pausar · B arsenal
         </div>
         <div class="ammo">
-          <small>RX-06 / REVÓLVER</small
+          <small id="weapon-name">RX-06 / REVÓLVER</small
           ><strong
             ><span id="ammo">6</span
             ><em> / <span id="reserve">60</span></em></strong
@@ -104,6 +104,30 @@
         <button id="apply">APLICAR E VOLTAR</button
         ><button id="cancel" class="secondary">CANCELAR</button
         ><button id="defaults" class="secondary">RESTAURAR PADRÕES</button>
+      </div>
+    </section>
+    <section id="arsenal" class="overlay" hidden aria-label="Arsenal gratuito">
+      <div class="arsenal-panel">
+        <div class="eyebrow">EQUIPAMENTO LIBERADO · TODAS GRATUITAS</div>
+        <h2>ARSENAL</h2>
+        <div class="arsenal-layout">
+          <div id="weapon-options" aria-label="Escolha uma arma"></div>
+          <div class="weapon-inspection">
+            <canvas
+              id="weapon-preview"
+              aria-label="Prévia 3D da arma selecionada"
+            ></canvas>
+            <p id="weapon-details"></p>
+            <button id="equip-weapon">EQUIPAR GRATUITAMENTE</button
+            ><button id="close-arsenal" class="secondary">
+              VOLTAR AO COMBATE · B / ESC
+            </button>
+          </div>
+        </div>
+        <p class="note">
+          A partida fica pausada enquanto o arsenal está aberto. Trocar preserva
+          a munição de cada arma.
+        </p>
       </div>
     </section>
     <div id="error" hidden role="alert"></div>

@@ -73,3 +73,17 @@ Desempenho e conforto precisam de avaliação humana em hardware real. Testes he
 A arma do jogador usa a geometria real de `src/assets/Gun.obj`: RX-06, seis tiros, disparo individual por clique e reserva de 60 munições. O efeito de disparo acompanha a saída do cano. O MTL original foi preservado para referência, mas seus caminhos locais do Windows não são carregados. Os dois DAE são formatos alternativos; o runtime utiliza apenas OBJ.
 
 As texturas PNG referenciadas nos arquivos não foram recebidas como arquivos acessíveis. Por isso o modelo usa acabamento metálico escuro provisório, sem afirmar que reproduz a textura original. Colocar o atlas original em `src/assets/pistol.png` permite carregá-lo pelas coordenadas UV do modelo. A recarga ainda usa a transição existente da arma; o OBJ não contém rig/animação de abertura do tambor.
+
+## Arsenal gratuito · B
+
+Durante a partida, pressione **B** para abrir o arsenal com prévia 3D e atributos. Selecione uma arma e clique em **Equipar gratuitamente**. B, Esc ou Voltar fecham a tela. A partida fica pausada durante a seleção; não há moeda, compra ou bloqueio. Cada arma preserva sua munição durante a partida; uma troca cancela recarga incompleta e reiniciar restaura o arsenal.
+
+| Arma | Modelo | Munição | Funcionamento |
+| --- | --- | --- | --- |
+| RX-06 Revólver | OBJ fornecido pelo usuário | 6 / 60 | Individual |
+| AR-01 Sentinela | 3D procedural: coronha, carregador, cano e trilho | 30 / 150 | Automático |
+| SM-09 Vértice | 3D procedural compacto | 32 / 160 | Automático |
+| EC-08 Bastião | 3D procedural: cano, tubo e apoio de madeira | 8 / 40 | Individual, 7 projéteis por cartucho |
+| FP-05 Horizonte | 3D procedural: cano longo e mira óptica | 5 / 30 | Individual, dano e alcance maiores |
+
+Modelos adicionais são geometria 3D original do protótipo, sem texturas/artes finais importadas. Dano, alcance, cadência e recarga são definidos em `src/weapons.js`; `src/weapon-models.js` mantém silhuetas e posições de saída do cano distintas. A escopeta usa múltiplos raycasts de dispersão e consome apenas um cartucho por disparo. O fuzil de precisão possui modelo de mira, mas ainda usa a transição de FOV existente; não oferece retículo telescópico dedicado. Sons e animações finais individuais continuam pendentes.
