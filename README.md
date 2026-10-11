@@ -67,3 +67,9 @@ Desempenho e conforto precisam de avaliação humana em hardware real. Testes he
 3. Introduzir inventário e armas baseadas em dados com modelos individuais.
 4. Construir servidor autoritativo e testes multi-cliente antes de oferecer partidas online.
 5. Expandir conteúdo e arte de acordo com as fases do briefing, sem marcar funções futuras como concluídas.
+
+## Revólver enviado pelo usuário
+
+A arma do jogador usa a geometria real de `src/assets/Gun.obj`: RX-06, seis tiros, disparo individual por clique e reserva de 60 munições. O efeito de disparo acompanha a saída do cano. O MTL original foi preservado para referência, mas seus caminhos locais do Windows não são carregados. Os dois DAE são formatos alternativos; o runtime utiliza apenas OBJ.
+
+As texturas PNG referenciadas nos arquivos não foram recebidas como arquivos acessíveis. Por isso o modelo usa acabamento metálico escuro provisório, sem afirmar que reproduz a textura original. Colocar o atlas original em `src/assets/pistol.png` permite carregá-lo pelas coordenadas UV do modelo. A recarga ainda usa a transição existente da arma; o OBJ não contém rig/animação de abertura do tambor.

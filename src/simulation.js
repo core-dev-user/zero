@@ -10,12 +10,12 @@ export const WALLS = [
   { x: 14, z: 15, w: 5, d: 3, h: 2.5 },
 ];
 export const WEAPON = Object.freeze({
-  name: "AR-01 Sentinela",
-  capacity: 24,
-  reserve: 120,
+  name: "RX-06 Revólver",
+  capacity: 6,
+  reserve: 60,
   damage: 34,
   range: 55,
-  interval: 0.14,
+  interval: 0.32,
   reload: 1.65,
 });
 export function blocked(x, z, r = 0.4) {

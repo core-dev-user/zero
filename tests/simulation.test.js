@@ -16,9 +16,9 @@ import { createEnemy, tickEnemy } from "../src/ai.js";
 test("fire consumes ammo and enforces cadence and reload exclusion", () => {
   const w = createWeapon();
   assert.ok(fire(w));
-  assert.equal(w.ammo, 23);
+  assert.equal(w.ammo, WEAPON.capacity - 1);
   assert.equal(fire(w), false);
-  tickWeapon(w, 0.15);
+  tickWeapon(w, WEAPON.interval + 0.01);
   assert.ok(reload(w));
   assert.equal(fire(w), false);
 });
@@ -30,8 +30,8 @@ test("reload transfers finite reserve without creating ammunition", () => {
   tickWeapon(w, 1);
   assert.equal(w.ammo, 2);
   tickWeapon(w, 1);
-  assert.equal(w.ammo, 7);
-  assert.equal(w.reserve, 0);
+  assert.equal(w.ammo, 6);
+  assert.equal(w.reserve, 1);
   assert.equal(reload(w), false);
 });
 test("empty weapon cannot fire and full magazine cannot reload", () => {
@@ -98,7 +98,7 @@ test("victory, defeat and restart obey match lifecycle", () => {
   m.reset();
   assert.equal(m.kills, 0);
   assert.equal(m.player.hp, 100);
-  assert.equal(m.weapon.ammo, 24);
+  assert.equal(m.weapon.ammo, WEAPON.capacity);
 });
 
 test("moving actors cannot pass through a live actor", () => {

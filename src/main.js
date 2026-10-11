@@ -12,6 +12,7 @@ import {
 import { Audio } from "./audio.js";
 import { createEnemy, tickEnemy } from "./ai.js";
 import { createSoldierVisual } from "./enemy-visual.js";
+import { createRevolver } from "./revolver.js";
 const $ = (id) => document.getElementById(id);
 const defaults = {
   sensitivity: 1,
@@ -169,24 +170,13 @@ markings.material = new THREE.MeshStandardMaterial({
 });
 const weapon = new THREE.Group();
 camera.add(weapon);
-box(0.13, 0.17, 0.52, 0.18, -0.17, -0.47, materials.dark, weapon);
-box(0.085, 0.085, 0.46, 0.18, -0.15, -0.88, materials.metal, weapon);
-box(0.07, 0.07, 0.12, 0.18, -0.15, -1.15, materials.dark, weapon);
-box(0.09, 0.24, 0.12, 0.18, -0.33, -0.5, materials.dark, weapon).rotation.x =
-  -0.2;
-box(0.07, 0.2, 0.1, 0.18, -0.3, -0.28, materials.wood, weapon);
-box(0.11, 0.14, 0.28, 0.18, -0.16, -0.15, materials.wood, weapon);
-box(0.08, 0.05, 0.38, 0.18, -0.06, -0.5, materials.metal, weapon);
-box(0.06, 0.07, 0.08, 0.18, -0.035, -0.57, materials.dark, weapon);
-box(0.12, 0.1, 0.32, 0.25, -0.34, -0.33, materials.enemy, weapon).rotation.x =
-  -0.3;
-box(0.11, 0.1, 0.3, 0.1, -0.29, -0.65, materials.enemy, weapon).rotation.x =
-  0.4;
+const revolver = createRevolver();
+weapon.add(revolver.model);
 const flash = new THREE.Mesh(
   new THREE.SphereGeometry(0.045, 7, 7),
   new THREE.MeshBasicMaterial({ color: "#fff2b0" }),
 );
-flash.position.set(0.18, -0.15, -1.23);
+flash.position.copy(revolver.muzzle);
 weapon.add(flash);
 flash.visible = false;
 const muzzle = new THREE.PointLight("#ffcd70", 0, 3);
@@ -261,7 +251,7 @@ function syncHud() {
       ? "RECARREGANDO…"
       : w.ammo === 0
         ? "PRESSIONE R PARA RECARREGAR"
-        : "5.56 × 45 MM";
+        : "REVÓLVER · 6 CÂMARAS";
   $("status").textContent = enemies.some((e) => e.state === "combat")
     ? "Contato hostil — procure cobertura"
     : "Patrulha ativa";
@@ -405,6 +395,7 @@ function effect(from, to, color) {
 }
 function shoot() {
   if (!fire(match.weapon)) return;
+  trigger = false; // One shot per press for the revolver.
   noise = { x: match.player.x, z: match.player.z };
   audio.play("shot");
   flashTime = 0.055;

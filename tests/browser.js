@@ -79,16 +79,25 @@ try {
   await page.mouse.down();
   await page.waitForTimeout(400);
   await page.mouse.up();
+  const firedAmmo = await page.locator("#ammo").textContent();
+  await page.mouse.down();
+  await page.waitForTimeout(900);
+  await page.mouse.up();
+  // Holding a revolver trigger cannot turn it into an automatic weapon.
+  assert.equal(
+    Number(await page.locator("#ammo").textContent()),
+    Number(firedAmmo) - 1,
+  );
   const ammo = Number(await page.locator("#ammo").textContent());
-  assert.ok(ammo < 24 && ammo > 0);
+  assert.ok(ammo < 6 && ammo > 0);
   await page.keyboard.press("r");
   await page.waitForFunction(
-    () => document.getElementById("ammo").textContent === "24",
+    () => document.getElementById("ammo").textContent === "6",
     {},
     { timeout: 30000 },
   );
-  assert.equal(await page.locator("#ammo").textContent(), "24");
-  assert.ok(Number(await page.locator("#reserve").textContent()) < 120);
+  assert.equal(await page.locator("#ammo").textContent(), "6");
+  assert.ok(Number(await page.locator("#reserve").textContent()) < 60);
   const start = await page.evaluate(() => window.__ozTelemetry().player);
   await page.keyboard.down("w");
   await page.waitForFunction((start) => {
