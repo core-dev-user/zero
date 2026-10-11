@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101815" />
+    <title>Operação Zero — Pátio 07</title>
+  </head>
+  <body>
+    <canvas
+      id="game"
+      aria-label="Arena tridimensional de Operação Zero"
+    ></canvas>
+    <div id="hud" hidden>
+      <header>
+        <div class="brand">OZ <span>OPERAÇÃO ZERO</span></div>
+        <div class="mission">
+          <small>OPERAÇÃO LOCAL · PÁTIO 07</small
+          ><strong>ELIMINE A PATRULHA</strong>
+        </div>
+        <div id="timer">03:00</div>
+      </header>
+      <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+      <div id="hitmarker">×</div>
+      <div id="damage"></div>
+      <aside class="objective">
+        <small>OBJETIVO</small>
+        <div><span id="kills">0</span> / 4 HOSTIS NEUTRALIZADOS</div>
+        <p id="status">Patrulha ativa</p>
+      </aside>
+      <footer>
+        <div class="health">
+          <small>INTEGRIDADE</small
+          ><strong><span id="health">100</span> <em>HP</em></strong>
+          <div class="bar"><div id="healthbar"></div></div>
+        </div>
+        <div class="controls">
+          WASD mover · Shift correr · Espaço saltar · Ctrl agachar<br />Mouse
+          disparar · Botão direito mirar · R recarregar · Esc pausar
+        </div>
+        <div class="ammo">
+          <small>AR-01 / SENTINELA</small
+          ><strong
+            ><span id="ammo">24</span
+            ><em> / <span id="reserve">120</span></em></strong
+          >
+          <p id="reload-status">5.56 × 45 MM</p>
+        </div>
+      </footer>
+    </div>
+    <section id="menu" class="overlay">
+      <div class="panel">
+        <div class="eyebrow">PROTÓTIPO JOGÁVEL · VERSÃO 0.1</div>
+        <h1>OPERAÇÃO<br /><span>ZERO</span></h1>
+        <p class="lead">PÁTIO 07 <span>///</span> INTERVENÇÃO INDUSTRIAL</p>
+        <p id="menu-description">
+          Uma arena. Quatro hostis. Três minutos.<br />Use a cobertura, controle
+          sua munição e sobreviva.
+        </p>
+        <button id="play">INICIAR OPERAÇÃO <span>→</span></button
+        ><button id="settings-button" class="secondary">CONFIGURAÇÕES</button>
+        <p class="note">
+          Treinamento local contra IA. Multiplayer ainda não implementado.<br />Mouse
+          e teclado · áudio sintetizado · modelos procedurais
+        </p>
+      </div>
+      <div class="vertical">UNIDADE DE INTERVENÇÃO / 07</div>
+    </section>
+    <section id="settings" class="overlay" hidden>
+      <div class="panel settings-panel">
+        <div class="eyebrow">PREFERÊNCIAS LOCAIS</div>
+        <h2>CONFIGURAÇÕES</h2>
+        <label
+          >Sensibilidade
+          <input
+            id="sensitivity"
+            type="range"
+            min="0.3"
+            max="3"
+            step="0.1" /><output id="sensitivity-value"></output
+        ></label>
+        <label
+          >Campo de visão
+          <input id="fov" type="range" min="65" max="105" step="1" /><output
+            id="fov-value"
+          ></output
+        ></label>
+        <label
+          >Volume
+          <input id="volume" type="range" min="0" max="1" step="0.05" /><output
+            id="volume-value"
+          ></output
+        ></label>
+        <label
+          >Qualidade
+          <select id="quality">
+            <option value="low">Baixa</option>
+            <option value="high">Alta</option>
+          </select></label
+        >
+        <label class="check"
+          ><input id="motion" type="checkbox" /> Balanço da arma</label
+        >
+        <button id="apply">APLICAR E VOLTAR</button
+        ><button id="cancel" class="secondary">CANCELAR</button
+        ><button id="defaults" class="secondary">RESTAURAR PADRÕES</button>
+      </div>
+    </section>
+    <div id="error" hidden role="alert"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
