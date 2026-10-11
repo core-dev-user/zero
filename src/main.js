@@ -11,6 +11,7 @@ import {
 } from "./simulation.js";
 import { Audio } from "./audio.js";
 import { createEnemy, tickEnemy } from "./ai.js";
+import { createSoldierVisual } from "./enemy-visual.js";
 const $ = (id) => document.getElementById(id);
 const defaults = {
   sensitivity: 1,
@@ -220,28 +221,9 @@ function spawnEnemies() {
     g.position.set(x, 0, z);
     scene.add(g);
     e.model = g;
-    e.parts = [];
-    const body = box(0.65, 0.85, 0.38, 0, 1.2, 0, materials.enemy, g),
-      vest = box(0.68, 0.45, 0.43, 0, 1.2, 0, materials.dark, g);
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.19, 12, 10),
-      materials.wood,
-    );
-    head.position.y = 1.86;
-    head.castShadow = true;
-    g.add(head);
-    box(0.36, 0.13, 0.36, 0, 1.99, 0, materials.enemy, g);
-    box(0.22, 0.055, 0.05, 0, 1.86, 0.17, materials.red, g);
-    e.legs = [
-      box(0.2, 0.65, 0.23, -0.18, 0.43, 0, materials.enemy, g),
-      box(0.2, 0.65, 0.23, 0.18, 0.43, 0, materials.enemy, g),
-    ];
-    box(0.15, 0.57, 0.18, -0.42, 1.23, 0.06, materials.enemy, g).rotation.x =
-      -0.45;
-    box(0.15, 0.57, 0.18, 0.42, 1.23, 0.06, materials.enemy, g).rotation.x =
-      -0.45;
-    box(0.12, 0.12, 0.67, 0.25, 1.3, 0.38, materials.dark, g);
-    e.parts = [body, vest, head];
+    const { parts, head, legs } = createSoldierVisual(g);
+    e.parts = parts;
+    e.legs = legs;
     for (const p of e.parts) {
       p.userData.enemy = e;
       p.userData.head = p === head;
