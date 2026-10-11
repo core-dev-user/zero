@@ -17,6 +17,20 @@ try {
     }),
     errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("oz-settings"))
+      localStorage.setItem(
+        "oz-settings",
+        JSON.stringify({
+          quality: "low",
+          sensitivity: 1,
+          volume: 0.5,
+          fov: 80,
+          motion: true,
+        }),
+      );
+  });
+  console.log("browser: loading");
   await page.goto("http://127.0.0.1:5173");
   await page.waitForTimeout(800);
   await page.locator("#settings-button").click();
@@ -33,6 +47,7 @@ try {
   await page.locator("#settings-button").click();
   assert.equal(await page.locator("#sensitivity").inputValue(), "1.8");
   await page.locator("#cancel").click();
+  console.log("browser: starting");
   await page.locator("#play").click();
   await page.waitForFunction(() => !document.getElementById("hud").hidden);
   assert.equal(
@@ -87,12 +102,27 @@ try {
     (await page.evaluate(() => window.__ozTelemetry())).enemies[target].hp <
       100,
   );
+  await page.waitForFunction(
+    () => window.__ozTelemetry().weapon.cooldown === 0,
+  );
+  const beforeSecond = await page.locator("#ammo").textContent();
   await page.mouse.down();
-  await page.waitForTimeout(400);
+  await page.waitForFunction(
+    (before) => document.getElementById("ammo").textContent !== before,
+    beforeSecond,
+  );
   await page.mouse.up();
   const firedAmmo = await page.locator("#ammo").textContent();
   await page.mouse.down();
-  await page.waitForTimeout(900);
+  await page.waitForFunction(
+    (before) =>
+      Number(document.getElementById("ammo").textContent) ===
+      Number(before) - 1,
+    firedAmmo,
+  );
+  await page.waitForFunction(
+    () => window.__ozTelemetry().weapon.cooldown === 0,
+  );
   await page.mouse.up();
   // Holding a revolver trigger cannot turn it into an automatic weapon.
   assert.equal(
@@ -103,11 +133,21 @@ try {
   assert.ok(ammo < 6 && ammo > 0);
   await page.keyboard.press("r");
   await page.waitForFunction(
+    () => window.__ozTelemetry().reloadMechanism?.drumOpen,
+  );
+  await page.screenshot({ path: "/tmp/zero-revolver-reload.png" });
+  assert.ok(Number(await page.locator("#ammo").textContent()) < 6);
+  await page.waitForFunction(
     () => document.getElementById("ammo").textContent === "6",
     {},
     { timeout: 30000 },
   );
   assert.equal(await page.locator("#ammo").textContent(), "6");
+  assert.equal(
+    (await page.evaluate(() => window.__ozTelemetry())).reloadMechanism
+      .drumOpen,
+    false,
+  );
   assert.ok(Number(await page.locator("#reserve").textContent()) < 60);
   const start = await page.evaluate(() => window.__ozTelemetry().player);
   await page.keyboard.down("w");
@@ -183,6 +223,12 @@ try {
   assert.equal(await page.locator("#error").isVisible(), false);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: "/tmp/operacao-zero.png" });
+  console.log(
+    "Render counters (headless, 1280x800, low):",
+    JSON.stringify(
+      (await page.evaluate(() => window.__ozTelemetry())).rendering,
+    ),
+  );
   console.log(
     "PASS: WebGL startup, settings persistence, pointer lock, fire, reload, movement inputs, pause and resume; no browser exceptions.",
   );

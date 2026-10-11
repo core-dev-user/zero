@@ -10,9 +10,25 @@ export const WALLS = [
   { x: -14, z: -15, w: 5, d: 3, h: 2.5 },
   { x: 14, z: 15, w: 5, d: 3, h: 2.5 },
 ];
+export const CEILINGS = [{ x: -18.5, z: 18, w: 7, d: 4, clearance: 1.45 }];
 export const WEAPON = WEAPONS[0];
-export function blocked(x, z, r = 0.4) {
+export function canStand(x, z, r = 0.4) {
+  return !CEILINGS.some(
+    (c) => Math.abs(x - c.x) < c.w / 2 + r && Math.abs(z - c.z) < c.d / 2 + r,
+  );
+}
+
+export function blocked(x, z, r = 0.4, height = 1.9) {
   if (Math.abs(x) > ARENA / 2 - r || Math.abs(z) > ARENA / 2 - r) return true;
+  if (
+    CEILINGS.some(
+      (c) =>
+        height > c.clearance &&
+        Math.abs(x - c.x) < c.w / 2 + r &&
+        Math.abs(z - c.z) < c.d / 2 + r,
+    )
+  )
+    return true;
   return WALLS.some(
     (b) =>
       x > b.x - b.w / 2 - r &&
@@ -23,7 +39,7 @@ export function blocked(x, z, r = 0.4) {
 }
 export function move(body, dx, dz, r = 0.4, others = []) {
   const canOccupy = (x, z) =>
-    !blocked(x, z, r) &&
+    !blocked(x, z, r, body.height ?? 1.9) &&
     others.every((o) => Math.hypot(x - o.x, z - o.z) >= r + (o.radius ?? 0.45));
   // Small swept steps prevent crossing thin walls during a delayed frame.
   const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.15));

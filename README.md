@@ -78,12 +78,18 @@ As texturas PNG referenciadas nos arquivos não foram recebidas como arquivos ac
 
 Durante a partida, pressione **B** para abrir o arsenal com prévia 3D e atributos. Selecione uma arma e clique em **Equipar gratuitamente**. B, Esc ou Voltar fecham a tela. A partida fica pausada durante a seleção; não há moeda, compra ou bloqueio. Cada arma preserva sua munição durante a partida; uma troca cancela recarga incompleta e reiniciar restaura o arsenal.
 
-| Arma | Modelo | Munição | Funcionamento |
-| --- | --- | --- | --- |
-| RX-06 Revólver | OBJ fornecido pelo usuário | 6 / 60 | Individual |
-| AR-01 Sentinela | 3D procedural: coronha, carregador, cano e trilho | 30 / 150 | Automático |
-| SM-09 Vértice | 3D procedural compacto | 32 / 160 | Automático |
-| EC-08 Bastião | 3D procedural: cano, tubo e apoio de madeira | 8 / 40 | Individual, 7 projéteis por cartucho |
-| FP-05 Horizonte | 3D procedural: cano longo e mira óptica | 5 / 30 | Individual, dano e alcance maiores |
+| Arma            | Modelo                                            | Munição  | Funcionamento                        |
+| --------------- | ------------------------------------------------- | -------- | ------------------------------------ |
+| RX-06 Revólver  | OBJ fornecido pelo usuário                        | 6 / 60   | Individual                           |
+| AR-01 Sentinela | 3D procedural: coronha, carregador, cano e trilho | 30 / 150 | Automático                           |
+| SM-09 Vértice   | 3D procedural compacto                            | 32 / 160 | Automático                           |
+| EC-08 Bastião   | 3D procedural: cano, tubo e apoio de madeira      | 8 / 40   | Individual, 7 projéteis por cartucho |
+| FP-05 Horizonte | 3D procedural: cano longo e mira óptica           | 5 / 30   | Individual, dano e alcance maiores   |
 
 Modelos adicionais são geometria 3D original do protótipo, sem texturas/artes finais importadas. Dano, alcance, cadência e recarga são definidos em `src/weapons.js`; `src/weapon-models.js` mantém silhuetas e posições de saída do cano distintas. A escopeta usa múltiplos raycasts de dispersão e consome apenas um cartucho por disparo. O fuzil de precisão possui modelo de mira, mas ainda usa a transição de FOV existente; não oferece retículo telescópico dedicado. Sons e animações finais individuais continuam pendentes.
+
+## Entrega de imersão
+
+O revólver preserva a geometria enviada e agora possui apresentação de abertura do tambor, cartuchos e mãos segmentadas. A arena recebeu superfícies procedurais, reflexos, sinalização e cobertura baixa navegável agachado. Movimento/câmera têm transições e recuperação de recuo; inimigos possuem munição finita, recarga, busca de cobertura e animações vinculadas ao estado. O arsenal gratuito por B foi preservado.
+
+Consulte [docs/realism.md](docs/realism.md) para a validação, limitações e assets ainda necessários. As descrições anteriores de recarga e animação simples nesta documentação representam a base inicial; esse documento registra a evolução atual. Modelos humanos/animados de produção, textura PNG original e gravações de áudio continuam pendentes.

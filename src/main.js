@@ -1,6 +1,21 @@
 import * as THREE from "three";
+import { surfaceMaterial } from "./surface-materials.js";
+import { createViewHands } from "./view-hands.js";
+import { reloadPose, smoothVelocity } from "./presentation.js";
+import { disposeModelGeometry } from "./model-batching.js";
+import { detailArena } from "./arena-detail.js";
 import "./style.css";
-import { WALLS, Match, move, damageAt, fire, reload } from "./simulation.js";
+import {
+  WALLS,
+  CEILINGS,
+  canStand,
+  visible,
+  Match,
+  move,
+  damageAt,
+  fire,
+  reload,
+} from "./simulation.js";
 import { Audio } from "./audio.js";
 import { createEnemy, tickEnemy } from "./ai.js";
 import { createSoldierVisual } from "./enemy-visual.js";
@@ -50,6 +65,24 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const scene = new THREE.Scene();
+// Lightweight studio sky for metal reflections; no external HDRI or room render.
+const sky = document.createElement("canvas");
+sky.width = 128;
+sky.height = 64;
+const skyContext = sky.getContext("2d");
+const skyGradient = skyContext.createLinearGradient(0, 0, 0, 64);
+skyGradient.addColorStop(0, "#b4c8d3");
+skyGradient.addColorStop(0.42, "#e1dfd0");
+skyGradient.addColorStop(0.55, "#727d73");
+skyGradient.addColorStop(1, "#343c32");
+skyContext.fillStyle = skyGradient;
+skyContext.fillRect(0, 0, 128, 64);
+const skyTexture = new THREE.CanvasTexture(sky);
+skyTexture.mapping = THREE.EquirectangularReflectionMapping;
+skyTexture.colorSpace = THREE.SRGBColorSpace;
+scene.environment = skyTexture;
+scene.environmentIntensity = 0.65;
+
 scene.background = new THREE.Color("#8d9c9a");
 scene.fog = new THREE.Fog("#8d9c9a", 28, 80);
 const camera = new THREE.PerspectiveCamera(
@@ -64,7 +97,7 @@ scene.add(new THREE.HemisphereLight("#d3e7e5", "#414736", 2));
 const sun = new THREE.DirectionalLight("#fff0d2", 3);
 sun.position.set(-18, 32, 8);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1024, 1024);
 Object.assign(sun.shadow.camera, {
   left: -30,
   right: 30,
@@ -76,16 +109,9 @@ Object.assign(sun.shadow.camera, {
 sun.shadow.bias = -0.001;
 scene.add(sun);
 const materials = {
-  floor: new THREE.MeshStandardMaterial({ color: "#535c54", roughness: 0.95 }),
-  concrete: new THREE.MeshStandardMaterial({
-    color: "#9a9c8d",
-    roughness: 0.9,
-  }),
-  metal: new THREE.MeshStandardMaterial({
-    color: "#354b48",
-    metalness: 0.65,
-    roughness: 0.5,
-  }),
+  floor: surfaceMaterial("concrete", "#737b72"),
+  concrete: surfaceMaterial("concrete", "#c0bdae"),
+  metal: surfaceMaterial("metal", "#536964"),
   dark: new THREE.MeshStandardMaterial({
     color: "#202b2b",
     metalness: 0.6,
@@ -161,8 +187,16 @@ markings.material = new THREE.MeshStandardMaterial({
   transparent: true,
   opacity: 0.3,
 });
+detailArena(scene);
+for (const c of CEILINGS) {
+  solids.push(
+    box(c.w, 0.15, c.d, c.x, c.clearance + 0.075, c.z, materials.metal),
+  );
+}
+
 const weapon = new THREE.Group();
 camera.add(weapon);
+const hands = createViewHands(weapon);
 const models = new Map();
 function getModel(id) {
   if (!models.has(id)) models.set(id, createWeaponModel(id));
@@ -193,11 +227,20 @@ let enemies = [],
   hitTime = 0,
   damageTime = 0,
   elapsed = 0;
+let velocityX = 0,
+  velocityZ = 0,
+  eyeHeight = 1.7,
+  shotRecovery = 0,
+  stepDistance = 0,
+  lastReloadStage = -1;
 const keys = new Set(),
   ray = new THREE.Raycaster(),
   effects = [];
 function spawnEnemies() {
-  for (const e of enemies) scene.remove(e.model);
+  for (const e of enemies) {
+    scene.remove(e.model);
+    disposeModelGeometry(e.model);
+  }
   enemies = [
     [-17, -8],
     [17, 8],
@@ -209,9 +252,19 @@ function spawnEnemies() {
     g.position.set(x, 0, z);
     scene.add(g);
     e.model = g;
-    const { parts, head, legs } = createSoldierVisual(g);
+    const {
+      parts,
+      head,
+      legs,
+      arms,
+      muzzle: enemyMuzzle,
+      flash: enemyFlash,
+    } = createSoldierVisual(g);
     e.parts = parts;
     e.legs = legs;
+    e.arms = arms;
+    e.muzzle = enemyMuzzle;
+    e.flash = enemyFlash;
     for (const p of e.parts) {
       p.userData.enemy = e;
       p.userData.head = p === head;
@@ -257,12 +310,16 @@ function syncHud() {
 }
 let arsenalOpen = false;
 function equipVisual() {
+  activeModel.animateReload?.(reloadPose(0, 1));
   weapon.remove(activeModel.model);
   activeModel = getModel(match.weapon.definition.id);
   weapon.add(activeModel.model);
   flash.position.copy(activeModel.muzzle);
   muzzle.position.copy(flash.position);
   recoil = 0;
+  shotRecovery = 0;
+  lastReloadStage = -1;
+  activeModel.animateReload?.(reloadPose(0, match.weapon.definition.reload));
   flashTime = 0;
   trigger = false;
 }
@@ -314,6 +371,9 @@ async function begin() {
     spawnEnemies();
     yaw = 0;
     pitch = 0;
+    velocityX = velocityZ = 0;
+    eyeHeight = 1.7;
+    shotRecovery = 0;
     recoil = 0;
     effects.splice(0).forEach((e) => {
       scene.remove(e.mesh);
@@ -381,7 +441,12 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
   keys.add(e.code);
   if (e.code === "KeyR" && reload(match.weapon)) audio.play("reload");
-  if (e.code === "Space" && match.player.y <= 1.71 && !keys.has("ControlLeft"))
+  if (
+    e.code === "Space" &&
+    match.player.y <= 1.71 &&
+    !keys.has("ControlLeft") &&
+    canStand(match.player.x, match.player.z)
+  )
     match.player.vy = 5.6;
 });
 document.addEventListener("keyup", (e) => keys.delete(e.code));
@@ -451,10 +516,10 @@ function shoot() {
   const definition = match.weapon.definition;
   if (!definition.automatic) trigger = false;
   noise = { x: match.player.x, z: match.player.z };
-  audio.play("shot");
+  audio.play("shot", 0, 1, definition.id);
   flashTime = 0.055;
   recoil = 0.06;
-  pitch = Math.min(1.35, pitch + definition.recoil);
+  shotRecovery = Math.min(0.08, shotRecovery + definition.recoil);
   camera.updateMatrixWorld(true);
   for (let pellet = 0; pellet < definition.pellets; pellet++) {
     ray.setFromCamera(
@@ -473,7 +538,12 @@ function shoot() {
       to = h ? h.point : ray.ray.at(definition.range, new THREE.Vector3());
     effect(flash.getWorldPosition(new THREE.Vector3()), to, "#e4dbae");
     if (h) {
-      audio.play("hit");
+      audio.play(
+        "hit",
+        0,
+        1,
+        h.object.material?.metalness > 0.3 ? "metal" : "concrete",
+      );
       const e = h.object.userData.enemy;
       if (e) {
         e.hp = Math.max(
@@ -481,10 +551,10 @@ function shoot() {
           e.hp - damageAt(h.distance, h.object.userData.head, definition),
         );
         hitTime = 0.15;
+        e.stagger = 0.18;
         if (!e.hp) {
           match.kill();
-          e.model.rotation.z = Math.PI / 2;
-          e.model.position.y = 0.33;
+          e.death = 0;
         }
       }
     }
@@ -494,7 +564,7 @@ function update(dt) {
   const p = match.player;
   match.tick(dt);
   elapsed += dt;
-  const crouch = keys.has("ControlLeft"),
+  const crouch = keys.has("ControlLeft") || !canStand(p.x, p.z),
     speed = crouch ? 2 : aim ? 3 : keys.has("ShiftLeft") ? 7 : 4.5;
   let x = Number(keys.has("KeyD")) - Number(keys.has("KeyA")),
     z = Number(keys.has("KeyW")) - Number(keys.has("KeyS"));
@@ -502,13 +572,26 @@ function update(dt) {
   if (length) {
     x /= length;
     z /= length;
-    move(
-      p,
-      (x * Math.cos(yaw) - z * Math.sin(yaw)) * speed * dt,
-      (-x * Math.sin(yaw) - z * Math.cos(yaw)) * speed * dt,
-      0.4,
-      enemies.filter((e) => e.hp > 0),
-    );
+  }
+  const desiredX = (x * Math.cos(yaw) - z * Math.sin(yaw)) * speed;
+  const desiredZ = (-x * Math.sin(yaw) - z * Math.cos(yaw)) * speed;
+  velocityX = smoothVelocity(velocityX, desiredX, dt, length ? 12 : 18);
+  velocityZ = smoothVelocity(velocityZ, desiredZ, dt, length ? 12 : 18);
+  p.height = crouch ? 1.3 : Math.max(1.9, p.y + 0.2);
+  const beforeX = p.x,
+    beforeZ = p.z;
+  move(
+    p,
+    velocityX * dt,
+    velocityZ * dt,
+    0.4,
+    enemies.filter((e) => e.hp > 0),
+  );
+  const travelled = Math.hypot(p.x - beforeX, p.z - beforeZ);
+  stepDistance += travelled;
+  if (stepDistance > 0.95 && p.y <= 1.71) {
+    audio.play("step", 0, 0.45);
+    stepDistance = 0;
   }
   const height = crouch ? 1.1 : 1.7;
   if (p.y > height || p.vy > 0) {
@@ -519,8 +602,12 @@ function update(dt) {
       p.vy = 0;
     }
   } else p.y = height;
-  camera.position.set(p.x, p.y, p.z);
-  camera.rotation.set(pitch, yaw, 0);
+  eyeHeight = smoothVelocity(eyeHeight, p.y, dt, 18);
+  if (Math.abs(eyeHeight - p.y) < 0.001) eyeHeight = p.y;
+  camera.position.set(p.x, eyeHeight, p.z);
+  shotRecovery = Math.max(0, shotRecovery - dt * 0.1);
+  camera.rotation.set(pitch + shotRecovery, yaw, 0);
+  audio.setListener(camera.position, yaw, pitch + shotRecovery);
   camera.fov = THREE.MathUtils.lerp(
     camera.fov,
     aim ? settings.fov * 0.72 : settings.fov,
@@ -537,9 +624,20 @@ function update(dt) {
             (match.weapon.reloading / match.weapon.definition.reload) * Math.PI,
           )
         : 0),
-    recoil,
+    -0.13 + recoil,
   );
-  weapon.rotation.z = match.weapon.reloading > 0 ? -0.25 : 0;
+  const pose = reloadPose(
+    match.weapon.reloading,
+    match.weapon.definition.reload,
+  );
+  activeModel.animateReload?.(pose, match.weapon);
+  hands.update(match.weapon.definition.id, pose);
+  weapon.rotation.z = pose.aperture * -0.22;
+  weapon.rotation.x = recoil * 0.4;
+  const reloadStage =
+    match.weapon.reloading > 0 ? Math.floor(pose.progress * 4) : -1;
+  if (reloadStage !== lastReloadStage && reloadStage >= 0) audio.play("reload");
+  lastReloadStage = reloadStage;
   if (trigger) shoot();
   for (const e of enemies) {
     const oldX = e.x,
@@ -550,15 +648,15 @@ function update(dt) {
       dt,
       noise,
       (enemy, distance) => {
-        const source = new THREE.Vector3(enemy.x, 1.3, enemy.z),
+        const source = enemy.muzzle.getWorldPosition(new THREE.Vector3()),
           target = new THREE.Vector3(p.x, p.y - 0.2, p.z);
         effect(source, target, "#ffab6c");
         const relative = Math.atan2(enemy.x - p.x, enemy.z - p.z) + yaw;
-        audio.play(
-          "shot",
-          Math.sin(relative),
-          Math.max(0.08, 1 - distance / 32),
-        );
+        audio.play("shot", Math.sin(relative), 1, "rifle", {
+          x: enemy.x,
+          y: 1.3,
+          z: enemy.z,
+        });
         // Aim errors are explicit; damage is applied only with line of sight.
         if (Math.random() < 0.65) {
           match.hitPlayer(8);
@@ -571,17 +669,51 @@ function update(dt) {
         ...enemies.filter((other) => other !== e && other.hp > 0),
       ],
     );
+    e.flash.visible = e.hp > 0 && e.kick > 0;
     if (e.hp > 0) {
       e.model.position.set(e.x, 0, e.z);
       if (e.target)
         e.model.rotation.y = Math.atan2(e.target.x - e.x, e.target.z - e.z);
-      const moving = Math.hypot(e.x - oldX, e.z - oldZ) > 0.001;
+      const travelled = Math.hypot(e.x - oldX, e.z - oldZ);
+      const oldGait = e.gait;
+      e.gait += travelled * 5;
+      if (Math.floor(oldGait / Math.PI) !== Math.floor(e.gait / Math.PI))
+        audio.play(
+          "step",
+          0,
+          0.35,
+          "concrete",
+          { x: e.x, y: 0.2, z: e.z },
+          !visible(e, p),
+        );
+      if (e.reloading > 0 && !e.wasReloading)
+        audio.play(
+          "reload",
+          0,
+          0.6,
+          "metal",
+          { x: e.x, y: 1.3, z: e.z },
+          !visible(e, p),
+        );
+      e.wasReloading = e.reloading > 0;
       e.legs.forEach(
         (leg, i) =>
-          (leg.rotation.x = moving
-            ? Math.sin(elapsed * 7 + i * Math.PI) * 0.35
-            : 0),
+          (leg.rotation.x =
+            travelled > 0.001 ? Math.sin(e.gait + i * Math.PI) * 0.28 : 0),
       );
+      e.arms.forEach(
+        (arm, i) =>
+          (arm.rotation.x =
+            -0.45 -
+            e.kick * 0.8 +
+            (e.reloading > 0 ? Math.sin(elapsed * 4 + i) * 0.14 : 0)),
+      );
+      e.model.rotation.z =
+        e.stagger > 0.01 ? Math.sin(e.stagger * 35) * 0.045 : 0;
+    } else {
+      e.death = Math.min(1, (e.death || 0) + dt * 2);
+      e.model.rotation.z = (e.death * Math.PI) / 2;
+      e.model.position.y = e.death * 0.33;
     }
   }
   noise = null;
@@ -642,9 +774,28 @@ export function getTelemetry() {
     player: { ...match.player },
     weapon: { ...match.weapon },
     weaponModel: activeModel.model.children.length,
+    reloadMechanism: activeModel.reloadState?.(),
+    reloadVisual: reloadPose(
+      match.weapon.reloading,
+      match.weapon.definition.reload,
+    ),
+    rendering: {
+      calls: renderer.info.render.calls,
+      triangles: renderer.info.render.triangles,
+      geometries: renderer.info.memory.geometries,
+      textures: renderer.info.memory.textures,
+    },
     arsenalOpen,
     kills: match.kills,
-    enemies: enemies.map(({ x, z, hp, state }) => ({ x, z, hp, state })),
+    enemies: enemies.map(({ x, z, hp, state, ammo, reserve, reloading }) => ({
+      x,
+      z,
+      hp,
+      state,
+      ammo,
+      reserve,
+      reloading,
+    })),
     yaw,
     pitch,
   };
